@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <title>VBA Analysis Result</title>
+  </head>
+  <body>
+    <div class="container">
+      <h1>VBA Analysis Result</h1>
+      <p>Download the generated documentation: <a href="{{ documentation_file }}" download>Download Documentation</a></p>
+      <h2>Flow Diagram</h2>
+      <img src="{{ diagram_file }}" alt="Flow Diagram">
+    </div>
+  </body>
+</html>
