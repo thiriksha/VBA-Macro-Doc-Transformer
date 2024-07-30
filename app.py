@@ -1,75 +1,110 @@
-from flask import Flask, request, render_template, send_file
+import google.generativeai as genai
+import time
+from flask import Flask, request, render_template
 import zipfile
 import os
 import shutil
-import docx
-from docx import Document
-import graphviz
+from oletools.olevba import VBA_Parser
+import sys
+from graphviz import Digraph
 
-app = Flask(__name__)
+# Configure Google Generative AI
+genai.configure(api_key=os.getenv("GENAI_API_KEY"))  # Use environment variable for API key
 
-def extract_vba_code(file):
-    with zipfile.ZipFile(file, 'r') as zip_ref:
-        zip_ref.extractall('temp')
+# Set up the model
+generation_config = {
+    "temperature": 0.9,
+    "top_p": 1,
+    "top_k": 1,
+    "max_output_tokens": 2048,
+}
+model = genai.GenerativeModel(model_name="gemini-1.0-pro", generation_config=generation_config)
+
+app = Flask(__name__)  # Corrected from _name_ to __name__
+
+def extract_vba_code(file_path):
     vba_code = ""
+    print("Starting to extract VBA code...")
+    sys.stdout.flush()
+    try:
+        with zipfile.ZipFile(file_path, 'r') as zip_ref:
+            zip_ref.extractall('temp')
+        print("Files extracted to 'temp' directory")
+        sys.stdout.flush()
+    except Exception as e:
+        print(f"Error extracting files: {e}")
+        sys.stdout.flush()
+        return "", ""
+
     for root, dirs, files in os.walk('temp'):
         for file in files:
-            if file.endswith('.vb') or file.endswith('.bas') or file.endswith('.cls'):
-                with open(os.path.join(root, file), 'r') as vb_file:
-                    vba_code += vb_file.read()
-    shutil.rmtree('temp')
+            print(f"Found file: {file}")
+            sys.stdout.flush()
+            if file == 'vbaProject.bin':
+                print("Found vbaProject.bin, parsing...")
+                sys.stdout.flush()
+                try:
+                    vba_parser = VBA_Parser(os.path.join(root, file))
+                    if vba_parser.detect_vba_macros():
+                        for (filename, stream_path, vba_filename, vba_code_content) in vba_parser.extract_macros():
+                            print(f"Extracting macro: {vba_filename}")
+                            sys.stdout.flush()
+                            vba_code += f"Filename: {vba_filename}\n"
+                            vba_code += vba_code_content + "\n\n"
+                    else:
+                        print("No VBA macros detected.")
+                        sys.stdout.flush()
+                except Exception as e:
+                    print(f"Error parsing vbaProject.bin: {e}")
+                    sys.stdout.flush()
+
+    try:
+        shutil.rmtree('temp')
+        print("Temporary files deleted.")
+        sys.stdout.flush()
+    except Exception as e:
+        print(f"Error deleting temporary files: {e}")
+        sys.stdout.flush()
+
+    print("Extraction complete.")
+    sys.stdout.flush()
     return vba_code
 
-def generate_documentation(vba_code):
-    doc = Document()
-    doc.add_heading('VBA Macro Documentation', 0)
-    doc.add_heading('Extracted VBA Code:', level=1)
-    doc.add_paragraph(vba_code)
+def get_code_explanation(vba_code):
+    try:
+        convo = model.start_chat(history=[])
+        convo.send_message(f"Explain the following VBA code in 2 or 3 small paragraphs:\n\n{vba_code}")
+        time.sleep(2)  # Small delay to ensure response
+        result = convo.last.text
+        return result
+    except Exception as e:
+        print(f"Error getting code explanation: {e}")
+        return "Error generating explanation."
 
-    filename = "VBA_Documentation.docx"
-    doc.save(filename)
-    return filename
+def get_code_explanation_flow_chart(vba_code):
+    try:
+        convo = model.start_chat(history=[])
+        convo.send_message(f"List out the main functionality of the code in Module1.bas in short, numbered steps suitable for creating a flowchart. Focus on the functionality and avoid technical details. No other extra statements. Just list out the steps only:\n\n{vba_code}")
+        time.sleep(2)  # Small delay to ensure response
+        result = convo.last.text
+        return result
+    except Exception as e:
+        print(f"Error getting code explanation for flowchart: {e}")
+        return "Error generating flowchart steps."
 
-def generate_flow_diagram(vba_code):
-    dot = graphviz.Digraph(comment='VBA Macro Flow Diagram')
+def create_process_flow_diagram(explanation):
+    steps = explanation.split('\n')
+    steps = [step.strip() for step in steps if step.strip()]
 
-    # Placeholder for logic extraction and diagram creation
-    # This part needs to be customized based on the actual structure and logic of your VBA code
-    functions = extract_functions(vba_code)
-    for func in functions:
-        dot.node(func, func)
-    for func in functions:
-        for call in extract_function_calls(vba_code, func):
-            dot.edge(func, call)
+    dot = Digraph(comment='VBA Macro Process Flow')
+    dot.attr(rankdir='TB')  # Change direction to top-to-bottom
 
-    diagram_path = 'flow_diagram'
-    dot.render(diagram_path, format='png')
-    return f'{diagram_path}.png'
+    for i, step in enumerate(steps):
+        dot.node(f'Step {i+1}', step)
 
-def extract_functions(vba_code):
-    # Extract function names from the VBA code
-    functions = []
-    lines = vba_code.splitlines()
-    for line in lines:
-        if line.strip().lower().startswith("sub "):
-            func_name = line.strip().split()[1].split('(')[0]
-            functions.append(func_name)
-    return functions
-
-def extract_function_calls(vba_code, func):
-    # Extract function calls within a function from the VBA code
-    calls = []
-    lines = vba_code.splitlines()
-    inside_func = False
-    for line in lines:
-        if line.strip().lower().startswith(f"sub {func.lower()}"):
-            inside_func = True
-        elif line.strip().lower().startswith("end sub"):
-            inside_func = False
-        elif inside_func and "(" in line and ")" in line:
-            call = line.strip().split('(')[0].split()[-1]
-            calls.append(call)
-    return calls
+    file_path = 'static/vba_macro_process_flow'
+    dot.render(file_path, format='png', cleanup=True)
+    return 'vba_macro_process_flow.png'
 
 @app.route('/')
 def upload_file():
@@ -78,11 +113,29 @@ def upload_file():
 @app.route('/analyze', methods=['POST'])
 def analyze_file():
     file = request.files['file']
-    file.save("uploaded_file.xlsm")
-    vba_code = extract_vba_code("uploaded_file.xlsm")
-    documentation_file = generate_documentation(vba_code)
-    diagram_file = generate_flow_diagram(vba_code)
-    return render_template('result.html', documentation_file=documentation_file, diagram_file=diagram_file)
+    file_path = "uploaded_file.xlsm"
+    try:
+        file.save(file_path)
+        vba_code = extract_vba_code(file_path)
+        
+        if vba_code:
+            explanation = get_code_explanation(vba_code)
+            explanation_flow = get_code_explanation_flow_chart(vba_code)
+            diagram_path = create_process_flow_diagram(explanation_flow)
+        else:
+            explanation = "No VBA code extracted."
+            diagram_path = None
+        
+        os.remove(file_path)
+    except Exception as e:
+        print(f"Error processing file: {e}")
+        vba_code = "An error occurred during file processing."
+        explanation = "Unable to generate explanation."
+        diagram_path = None
+
+    return render_template('result.html', vba_code=vba_code, explanation=explanation, diagram_path=diagram_path)
 
 if __name__ == '__main__':
+    if not os.path.exists('static'):
+        os.makedirs('static')
     app.run(debug=True)
