@@ -1,17 +1,83 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <title>VBA Analysis Result</title>
-  </head>
-  <body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Result</title>
+    <style>
+        body {
+            background-color: black;
+            color: white;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            text-align: center;
+        }
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+        .code-container {
+            text-align: left;
+            width: 100%;
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #333;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 1em;
+        }
+        .back-button {
+            font-size: 1.2em;
+            margin: 10px;
+            padding: 10px 20px;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        .back-button:hover {
+            background-color: #0056b3;
+        }
+        .flowchart-container {
+            margin: 20px 0;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
     <div class="container">
-      <h1>VBA Analysis Result</h1>
-      <p>Download the generated documentation: <a href="{{ documentation_file }}" download>Download Documentation</a></p>
-      <h2>Flow Diagram</h2>
-      <img src="{{ diagram_file }}" alt="Flow Diagram">
+        <h1>Analysis Result</h1>
+        <div class="code-container">
+            <h2>Extracted VBA Code</h2>
+            <pre>{{ vba_code }}</pre>
+        </div>
+        <div class="code-container">
+            <h2>Explanation</h2>
+            <pre>{{ explanation }}</pre>
+        </div>
+        {% if diagram_path %}
+        <div class="flowchart-container">
+            <h2>Process Flow Diagram</h2>
+            <img src="{{ url_for('static', filename=diagram_path) }}" alt="Process Flow Diagram">
+        </div>
+        {% endif %}
+        <button onclick="window.history.back()" class="back-button">Back</button>
     </div>
-  </body>
+</body>
 </html>
